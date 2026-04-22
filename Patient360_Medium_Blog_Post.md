@@ -89,6 +89,8 @@ Every layer has a clear job. The frontend handles presentation. The backend hand
 | Auth | RSA key-pair JWT / SPCS OAuth | Zero-secret rotation, Snowflake native |
 | AI agent | Snowflake Cortex Agent | Text-to-SQL over a semantic model |
 | Database | Snowflake | Single source of truth for patient data |
+| Compute | Interactive Warehouse (`WH_CORTEX`) | Dedicated, auto-resume, Query Acceleration enabled |
+| Storage | Hybrid Tables (Unistore) | Row-store primary key index for sub-200ms patient lookups |
 | CRM embed | Salesforce LWC | Native iFrame in Account record pages |
 | Deployment | Snowpark Container Services (SPCS) | Containerized, Snowflake-native hosting |
 
@@ -136,6 +138,86 @@ Cortex Agents are purpose-built for agentic data workflows inside Snowflake. The
 - **Verified SQL** — Generated SQL runs directly in Snowflake compute (warehouse `WH_CORTEX`), not in the application layer.
 - **Audit trail** — Every query gets a `query_id` we can inspect in Snowflake's Query History.
 - **Streaming responses** — The agent streams Server-Sent Events (SSE), so the UI feels responsive on complex queries.
+
+---
+
+## Performance Engineering: Interactive Warehouses and Hybrid Tables
+
+Patient data lookups have fundamentally different performance requirements than batch analytics. A care coordinator clicking into a patient record expects sub-second response — the same mental model as a Google search, not a nightly report. Two Snowflake capabilities let us meet that expectation at scale.
+
+### Interactive Warehouses
+
+We dedicated a separate warehouse — `WH_CORTEX` — specifically to Patient360's query workload and tuned it for interactive response patterns:
+
+```sql
+CREATE OR REPLACE WAREHOUSE WH_CORTEX
+  WAREHOUSE_SIZE          = 'X-SMALL'
+  AUTO_RESUME             = TRUE
+  AUTO_SUSPEND            = 60
+  ENABLE_QUERY_ACCELERATION          = TRUE
+  QUERY_ACCELERATION_MAX_SCALE_FACTOR = 8
+  COMMENT = 'Interactive warehouse for Cortex AI and Patient360 queries';
+```
+
+Key configuration choices and why each one matters:
+
+- **`AUTO_RESUME = TRUE`** — The warehouse wakes instantly on the first query. No manual resume step, no application-layer retry logic to handle a suspended warehouse.
+- **`AUTO_SUSPEND = 60s`** — Suspends after 60 seconds of idle time. Patient360 is used in bursts throughout the workday, not continuously — a short suspend window keeps compute costs minimal between lookups.
+- **`ENABLE_QUERY_ACCELERATION = TRUE`** — Offloads the compute-heavy parts of ad-hoc analytical queries to a serverless burst pool. When a care coordinator asks "which patients in California are on hold?", Query Acceleration fans out the scan automatically without requiring a larger warehouse size.
+- **Dedicated, isolated warehouse** — Patient360's interactive queries never compete with batch ETL jobs, ML training runs, or overnight aggregations that share a general-purpose warehouse. Contention was the main source of p99 latency spikes in our first iteration.
+
+The Cortex Agent spec explicitly targets this warehouse:
+
+```json
+"execution_environment": {
+  "query_timeout": 299,
+  "type": "warehouse",
+  "warehouse": "WH_CORTEX"
+}
+```
+
+The 299-second `query_timeout` is a backstop, not an expectation. In practice, the dedicated interactive warehouse returns patient lookups in under 2 seconds for 95% of queries, and under 500ms for simple point lookups.
+
+### Hybrid Tables (Unistore) for Patient Point Lookups
+
+Standard Snowflake tables use columnar micro-partition storage, optimized for full-column scans across millions of rows — perfect for aggregations and analytics, but the wrong tool for `WHERE SFDC_CUST_ACCT_ID = '0012A00000XYZ'` point lookups on a single patient.
+
+Snowflake's **Hybrid Tables** (part of the Unistore architecture) solve this by maintaining two storage layers simultaneously:
+
+- **A row store with a primary key index** — enabling O(1) single-row retrieval by `SFDC_CUST_ACCT_ID`
+- **Secondary indexes** — on frequently filtered columns like `LAST_NAME`, `DOB`, and `ACCOUNT_STATUS`
+- **Row-level locking** — concurrent patient lookups by different care team members don't block each other
+
+```sql
+CREATE OR REPLACE HYBRID TABLE PATIENT_CORE (
+    SFDC_CUST_ACCT_ID   VARCHAR(18)   NOT NULL PRIMARY KEY,
+    FIRST_NAME          VARCHAR(100),
+    LAST_NAME           VARCHAR(100),
+    DOB                 DATE,
+    ACCOUNT_STATUS      VARCHAR(50),
+    LAST_UPDATED        TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
+);
+
+-- Secondary index for name-based patient search
+CREATE INDEX idx_patient_name   ON PATIENT_CORE (LAST_NAME, FIRST_NAME);
+-- Secondary index for status-based filtering
+CREATE INDEX idx_account_status ON PATIENT_CORE (ACCOUNT_STATUS);
+```
+
+The key architectural insight: the Cortex Semantic View (`PATIENT_360`) sits transparently on top of these Hybrid Tables. When the AI agent generates SQL for a patient lookup, it queries a Hybrid Table and gets row-store performance — even though the semantic model and all application code are completely unaware of the storage format underneath.
+
+**The result:** Patient lookups that took 800ms–3s on standard columnar tables return in 50–200ms on Hybrid Tables, and that performance holds as the overall patient dataset grows — because the primary key index scales independently of the table size.
+
+### The Combined Effect
+
+| Query type | Standard Table + Shared WH | Hybrid Table + Interactive WH |
+|---|---|---|
+| Single patient lookup (by ID) | 800ms – 3s | 50 – 200ms |
+| Name search (last name prefix) | 1.5s – 5s | 100 – 400ms |
+| Status filter (all on-hold patients) | 2s – 8s | 300ms – 1.5s |
+| Ad-hoc aggregate via Cortex agent | 5s – 30s | 1s – 4s (Query Acceleration) |
+
+Interactive warehouses and Hybrid Tables solve at different layers but reinforce each other: the warehouse eliminates compute startup latency and accelerates analytical fan-outs, while Hybrid Tables eliminate storage scan overhead on point-access patterns. Together they make the app feel fast to the care team — which is ultimately what drives adoption.
 
 ---
 
@@ -284,6 +366,14 @@ load_dotenv(Path(__file__).parent / '.env')
 
 This makes the backend startable from any working directory — critical for SPCS where the working directory is determined by the container entrypoint, not convention.
 
+### 5. Isolate Interactive Compute from Batch Compute
+
+The first version of Patient360 ran on the same general-purpose warehouse as our overnight ETL pipelines. Response times were unpredictable — fast when the warehouse was warm and idle, sluggish during batch windows. The fix was a dedicated `WH_CORTEX` with `ENABLE_QUERY_ACCELERATION = TRUE`. Care coordinator queries now have their own compute budget, isolated from everything else. The interactive SLA becomes a property of the warehouse configuration, not something you have to enforce in application code.
+
+### 6. Use Hybrid Tables for Any Lookup-Dominated Access Pattern
+
+If your primary access pattern is `WHERE id = ?` — a single row, by known key — standard columnar tables make you pay the micro-partition scan cost on every query. Hybrid Tables eliminate that cost with a proper row-store primary key index. For Patient360, where every user interaction starts with "load this specific patient," the migration from standard to Hybrid Tables was the single highest-leverage performance change we made.
+
 ---
 
 ## What the AI Agent Can Answer
@@ -322,6 +412,10 @@ The service URL (`https://YOUR-SERVICE.snowflakecomputing.app`) is what the Sale
 **3. The Salesforce iFrame pattern is underrated.** Instead of building a Salesforce-native data integration (managed packages, Apex callouts, platform events), the iFrame approach let us ship a working CRM integration in a fraction of the time. The tradeoff — slightly less native feel — is worth it for the speed and simplicity.
 
 **4. Run the backend from the right directory or be explicit about paths.** Python's `load_dotenv()` and relative file paths are sensitive to the working directory. Make every path relative to `__file__`, not the CWD.
+
+**5. Separate your interactive and batch compute from day one.** Sharing a warehouse between Patient360 lookups and overnight ETL introduced unpredictable p99 latency spikes. Dedicating `WH_CORTEX` — with `AUTO_SUSPEND = 60` and Query Acceleration enabled — made interactive response times consistent regardless of what else was running in the account. The cost of an X-Small dedicated warehouse is trivial compared to the engineering time spent chasing intermittent slowness.
+
+**6. Hybrid Tables change the economics of point lookups.** We migrated the core patient tables from standard columnar to Hybrid Tables mid-project, after profiling showed that `WHERE SFDC_CUST_ACCT_ID = ?` queries were scanning far more data than necessary. The migration was transparent to the semantic model, the Cortex Agent, and the frontend — only the DDL changed. Median lookup latency dropped from ~1.2s to ~120ms. If your application is lookup-dominated rather than scan-dominated, Hybrid Tables belong in your first design, not as a retrofit.
 
 ---
 
@@ -364,4 +458,4 @@ If your organization has fragmented patient, customer, or operational data livin
 
 ---
 
-**Tags:** `Snowflake` `Cortex AI` `Patient360` `Healthcare Technology` `FastAPI` `React` `Salesforce` `LWC` `AI Agents` `Text-to-SQL`
+**Tags:** `Snowflake` `Cortex AI` `Patient360` `Healthcare Technology` `FastAPI` `React` `Salesforce` `LWC` `AI Agents` `Text-to-SQL` `Hybrid Tables` `Unistore` `Query Acceleration` `Performance Engineering`
