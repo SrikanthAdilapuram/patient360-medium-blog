@@ -110,7 +110,7 @@
 
   <!-- Author / byline -->
   <text x="80" y="648" font-family="'Segoe UI', Arial, sans-serif" font-size="15" font-weight="400"
-        fill="#6a8fa8" letter-spacing="0.5">Srikanth Adilapuram · Solution Data Architect · Inogen · 2026</text>
+        fill="#6a8fa8" letter-spacing="0.5">Srikanth Adilapuram · Solution Data Architect · 2026</text>
 
   <!-- ─────────────────────────────────────────── -->
   <!-- RIGHT PANEL: Dashboard mock-up             -->
@@ -191,11 +191,11 @@
   <rect x="756" y="436" width="318" height="130" rx="10" fill="#ffffff" fill-opacity="0.05" stroke="#ffffff" stroke-width="0.5" stroke-opacity="0.1"/>
   <text x="776" y="462" font-family="'Segoe UI', Arial, sans-serif" font-size="12" font-weight="600" fill="#29b5e8">MEDICAL DETAILS</text>
   <text x="776" y="484" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#8ab0c8">Diagnosis</text>
-  <text x="1006" y="484" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#e2eaf0" text-anchor="end">COPD (J44.1)</text>
-  <text x="776" y="504" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#8ab0c8">LPM Setting</text>
-  <text x="1006" y="504" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#e2eaf0" text-anchor="end">2 LPM Continuous</text>
+  <text x="1006" y="484" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#e2eaf0" text-anchor="end">Type 2 Diabetes (E11.9)</text>
+  <text x="776" y="504" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#8ab0c8">Treatment Plan</text>
+  <text x="1006" y="504" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#e2eaf0" text-anchor="end">Active</text>
   <text x="776" y="524" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#8ab0c8">Equipment</text>
-  <text x="1006" y="524" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#e2eaf0" text-anchor="end">Portable Concentrator</text>
+  <text x="1006" y="524" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#e2eaf0" text-anchor="end">Home Monitor</text>
   <text x="776" y="544" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#8ab0c8">Physician</text>
   <text x="1006" y="544" font-family="'Segoe UI', Arial, sans-serif" font-size="12" fill="#e2eaf0" text-anchor="end">Dr. Sarah Chen</text>
 
@@ -206,16 +206,16 @@
   <!-- User bubble -->
   <rect x="1112" y="472" width="290" height="28" rx="8" fill="#ffffff" fill-opacity="0.07"/>
   <text x="1122" y="490" font-family="'Segoe UI', Arial, sans-serif" font-size="11" fill="#a8c4d8">
-    What is this patient's LPM and diagnosis?
+    What is this patient's therapy and diagnosis?
   </text>
 
   <!-- AI response bubble -->
   <rect x="1112" y="508" width="290" height="44" rx="8" fill="#00d4aa" fill-opacity="0.12"/>
   <text x="1122" y="524" font-family="'Segoe UI', Arial, sans-serif" font-size="11" fill="#e2eaf0">
-    Patient has COPD (J44.1), prescribed
+    Patient has Type 2 Diabetes (E11.9), with
   </text>
   <text x="1122" y="540" font-family="'Segoe UI', Arial, sans-serif" font-size="11" fill="#e2eaf0">
-    2 LPM continuous oxygen therapy.
+    daily monitoring &amp; lifestyle therapy.
   </text>
   <!-- AI label -->
   <text x="1122" y="558" font-family="'Segoe UI', Arial, sans-serif" font-size="10" fill="#00d4aa">

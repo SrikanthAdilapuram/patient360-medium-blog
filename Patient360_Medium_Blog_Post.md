@@ -28,7 +28,7 @@ Patient360 is a full-stack application that gives care teams:
 
 1. **A single-pane-of-glass dashboard** showing demographics, contact info, insurance, medical details, account status, and physician information — all surfaced in real time from Snowflake.
 
-2. **A conversational AI agent** powered by Snowflake Cortex that translates natural-language questions ("What is this patient's primary diagnosis and LPM setting?") into SQL against a semantic data model, then returns a clean, structured answer — no SQL knowledge required.
+2. **A conversational AI agent** powered by Snowflake Cortex that translates natural-language questions ("What is this patient's primary diagnosis and therapy setting?") into SQL against a semantic data model, then returns a clean, structured answer — no SQL knowledge required.
 
 3. **A native Salesforce integration** via a Lightning Web Component (LWC) that embeds the entire Patient360 dashboard directly into the Salesforce Account record page, so reps never leave the CRM.
 
@@ -128,7 +128,7 @@ The agent spec is declarative JSON:
 }
 ```
 
-The semantic view (`PATIENT_360`) is the key abstraction. It maps business-friendly terms — "primary diagnosis," "LPM setting," "serviceable status" — onto the underlying Snowflake tables. This means the AI agent never needs to know schema internals, and business users can ask questions in their own language.
+The semantic view (`PATIENT_360`) is the key abstraction. It maps business-friendly terms — "primary diagnosis," "therapy setting," "serviceable status" — onto the underlying Snowflake tables. This means the AI agent never needs to know schema internals, and business users can ask questions in their own language.
 
 ### Why Cortex Agent instead of raw LLM calls?
 
@@ -384,7 +384,7 @@ Once the semantic model is in place, the agent becomes a powerful interface for 
 - *"Show me the patient's insurance information and Medicare details."*
 - *"Is this patient currently serviceable or on hold?"*
 - *"What are the physician contact details on file?"*
-- *"What LPM setting is prescribed for this patient?"*
+- *"What therapy setting is prescribed for this patient?"*
 
 The agent translates each into verified SQL against the `PATIENT_360` semantic view, executes it in Snowflake's warehouse, and returns a structured natural-language response — with optional Vega-Lite visualizations if the query warrants a chart.
 
@@ -454,7 +454,7 @@ If your organization has fragmented patient, customer, or operational data livin
 
 ---
 
-*Built on Snowflake Cortex AI, FastAPI, React 18, and Salesforce Lightning. Questions or feedback? Reach out at sadilapuram@inogen.net.*
+*Built on Snowflake Cortex AI, FastAPI, React 18, and Salesforce Lightning. Questions or feedback? Reach out at srikanth.adilapuram@gmail.com.*
 
 ---
 
