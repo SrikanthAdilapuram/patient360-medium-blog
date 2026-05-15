@@ -13,7 +13,7 @@ The answer is almost never in one place.
 - Demographics live in the CRM.
 - Insurance authorizations are buried in a legacy system.
 - Physician orders sit in the EHR.
-- Oxygen flow rates and therapy equipment details are in yet another portal.
+- Treatment history and connected-device data are in yet another portal.
 - Account status — whether a patient is serviceable, on hold, or pending — requires a phone call or a ticket to another team.
 
 The result is wasted minutes per interaction multiplied across thousands of daily touchpoints. Worse, context-switching errors happen: wrong insurance billed, wrong physician contacted, care delayed.
